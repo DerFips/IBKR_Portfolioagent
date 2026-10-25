@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Agent</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e2e8f0;min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;
+  background:#1a1d27;border-bottom:1px solid #2d3148}
+header h1{font-size:1.1rem;font-weight:600;color:#7c83ff}
+.badge{font-size:.75rem;padding:.2rem .6rem;border-radius:999px;background:#2d3148;color:#94a3b8}
+nav{display:flex;gap:.5rem;padding:.75rem 1.5rem;background:#13151f;border-bottom:1px solid #2d3148;
+  overflow-x:auto}
+.nav-btn{padding:.4rem .9rem;border:none;border-radius:6px;background:transparent;
+  color:#94a3b8;cursor:pointer;font-size:.85rem;white-space:nowrap;transition:all .2s}
+.nav-btn:hover,.nav-btn.active{background:#2d3148;color:#e2e8f0}
+main{padding:1.5rem;max-width:1400px;margin:0 auto}
+.section{display:none}.section.active{display:block}
+/* KPI Grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem;margin-bottom:1.5rem}
+.kpi{background:#1a1d27;border:1px solid #2d3148;border-radius:10px;padding:1rem}
+.kpi .label{font-size:.75rem;color:#64748b;margin-bottom:.3rem}
+.kpi .value{font-size:1.4rem;font-weight:700;color:#e2e8f0}
+.kpi .value.pos{color:#4ade80}.kpi .value.neg{color:#f87171}
+/* Table */
+.card{background:#1a1d27;border:1px solid #2d3148;border-radius:10px;overflow:hidden;margin-bottom:1.5rem}
+.card-head{padding:.75rem 1rem;border-bottom:1px solid #2d3148;font-size:.85rem;
+  font-weight:600;color:#94a3b8;display:flex;align-items:center;justify-content:space-between}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{padding:.6rem 1rem;text-align:left;color:#64748b;font-weight:500;border-bottom:1px solid #2d3148}
+td{padding:.6rem 1rem;border-bottom:1px solid #16192a}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1e2235}
+.tag{display:inline-block;padding:.15rem .5rem;border-radius:4px;font-size:.75rem;font-weight:600}
+.tag.buy{background:#14532d;color:#4ade80}.tag.sell{background:#450a0a;color:#f87171}
+.tag.hold{background:#1e3a5f;color:#60a5fa}.tag.neutral{background:#2d3148;color:#94a3b8}
+/* Run Modal */
+#run-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+  z-index:100;align-items:center;justify-content:center}
+#run-modal.open{display:flex}
+.run-box{background:#1a1d27;border:1px solid #2d3148;border-radius:14px;
+  padding:2rem;min-width:360px;max-width:460px;width:90%}
+#run-modal-title{font-size:1.1rem;font-weight:700;margin-bottom:1.2rem;color:#e2e8f0}
+.run-step{display:flex;align-items:center;gap:.75rem;padding:.5rem .2rem;
+  color:#475569;font-size:.9rem;transition:color .3s}
+.run-step.active{color:#e2e8f0}.run-step.done{color:#4ade80}.run-step.error{color:#f87171}
+.step-icon{width:22px;text-align:center;flex-shrink:0}
+.run-spinner{width:16px;height:16px;border:2px solid #7c83ff55;
+  border-top-color:#7c83ff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.run-progress{background:#0f1117;border-radius:999px;height:6px;
+  margin:1rem 0 .4rem;overflow:hidden}
+.run-progress-fill{height:100%;background:linear-gradient(90deg,#7c83ff,#a78bfa);
+  border-radius:999px;transition:width .4s}
+.run-meta{display:flex;justify-content:space-between;font-size:.75rem;color:#475569}
+/* Toast */
+#toast-area{position:fixed;bottom:1.5rem;right:1.5rem;z-index:200;display:flex;flex-direction:column;gap:.5rem}
+.toast{padding:.6rem 1.1rem;border-radius:8px;font-size:.85rem;
+  background:#1e2235;border:1px solid #2d3148;color:#e2e8f0;
+  animation:fadeIn .3s;pointer-events:none}
+.toast.warn{border-color:#92400e;color:#fbbf24}
+.toast.error{border-color:#7f1d1d;color:#f87171}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+/* Empty */
+.empty{padding:2.5rem;text-align:center;color:#475569;font-size:.9rem}
+/* Run status row */
+#run-status-bar{display:flex;align-items:center;gap:1rem;margin-bottom:1.2rem;
+  font-size:.8rem;color:#64748b}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 Portfolio Agent</h1>
+  <div style="display:flex;gap:.75rem;align-items:center">
+    <span id="run-status" class="badge">–</span>
+    <button id="btn-run" onclick="triggerRun()"
+      style="padding:.4rem 1rem;background:#7c83ff;color:#fff;border:none;
+             border-radius:7px;cursor:pointer;font-size:.85rem;font-weight:600">
+      ▶ Run
+    </button>
+  </div>
+</header>
+
+<nav>
+  <button class="nav-btn active" onclick="showSection('overview',this)">Übersicht</button>
+  <button class="nav-btn" onclick="showSection('portfolio',this)">Portfolio</button>
+  <button class="nav-btn" onclick="showSection('actions',this)">Aktionen</button>
+  <button class="nav-btn" onclick="showSection('history',this)">Historie</button>
+  <button class="nav-btn" onclick="showSection('watchlist',this)">Watchlist</button>
+  <button class="nav-btn" onclick="showSection('orders',this)">Orders</button>
+  <button class="nav-btn" onclick="showSection('market',this)">🔍 Markt-Scan</button>
+  <button class="nav-btn" onclick="showSection('analysis',this)">🏢 Analyse</button>
+  <button class="nav-btn" onclick="showSection('pview',this)">📈 Portfolio-Sicht</button>
+  <button class="nav-btn" onclick="showSection('calendar',this)">📅 Kalender</button>
+  <button class="nav-btn" onclick="showSection('backup',this)">💾 Backup</button>
+  <button class="nav-btn" onclick="showSection('settings',this)">Einstellungen</button>
+</nav>
+
+<main>
+
+<!-- ÜBERSICHT ─────────────────────────────────────────────── -->
+<div id="sec-overview" class="section active">
+  <div id="run-status-bar">
+    <span id="last-run-ts">Kein Run vorhanden</span>
+    <span id="last-run-view"></span>
+  </div>
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="kpi"><div class="label">Portfoliowert</div><div class="value" id="kpi-value">–</div></div>
+    <div class="kpi"><div class="label">Unrealisiertes PnL</div><div class="value" id="kpi-pnl">–</div></div>
+    <div class="kpi"><div class="label">Positionen</div><div class="value" id="kpi-pos">–</div></div>
+    <div class="kpi"><div class="label">Markteinschätzung</div><div class="value" id="kpi-view">–</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head">Zusammenfassung</div>
+    <div style="padding:1rem;font-size:.88rem;color:#94a3b8;line-height:1.6" id="overview-summary">
+      Noch kein Run vorhanden. Klicke ▶ Run um zu starten.
+    </div>
+  </div>
+</div>
+
+<!-- PORTFOLIO ─────────────────────────────────────────────── -->
+<div id="sec-portfolio" class="section">
+  <div class="card">
+    <div class="card-head">Positionen</div>
+    <div id="portfolio-body">
+      <table>
+        <thead><tr>
+          <th>Symbol</th><th>Stück</th><th>Ø Einstand</th>
+          <th>Kurs</th><th>Marktwert</th><th>PnL</th><th>Gewicht</th><th>Währung</th>
+        </tr></thead>
+        <tbody id="positions-tbody"><tr><td colspan="8" class="empty">Keine Daten</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- AKTIONEN ──────────────────────────────────────────────── -->
+<div id="sec-actions" class="section">
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-head">
+      Portfolio-Analyse
+      <span id="analyse-ts" style="font-weight:400;color:#475569"></span>
+    </div>
+    <div id="analyse-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem;padding:1rem">
+      <div class="kpi"><div class="label">Positionen analysiert</div><div class="value" id="an-total">–</div></div>
+      <div class="kpi"><div class="label">BUY</div><div class="value pos" id="an-buy">–</div></div>
+      <div class="kpi"><div class="label">HOLD</div><div class="value" id="an-hold">–</div></div>
+      <div class="kpi"><div class="label">SELL</div><div class="value neg" id="an-sell">–</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      Einzelpositionen
+      <span id="analyse-summary-text" style="font-weight:400;font-size:.8rem;color:#64748b"></span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Symbol</th><th>Empfehlung</th><th>Konfidenz</th><th>Risiko</th>
+        <th>Begründung</th><th></th>
+      </tr></thead>
+      <tbody id="actions-tbody"><tr><td colspan="6" class="empty">Noch keine Analyse – Run starten</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- HISTORIE ──────────────────────────────────────────────── -->
+<div id="sec-history" class="section">
+  <div class="card">
+    <div class="card-head">Run-Historie</div>
+    <table>
+      <thead><tr><th>ID</th><th>Zeitpunkt</th><th>Markt</th><th>Zusammenfassung</th></tr></thead>
+      <tbody id="history-tbody"><tr><td colspan="4" class="empty">Keine Einträge</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- WATCHLIST ─────────────────────────────────────────────── -->
+<div id="sec-watchlist" class="section">
+  <div class="card">
+    <div class="card-head">
+      Watchlist
+      <div style="display:flex;gap:.5rem">
+        <input id="wl-input" placeholder="Symbol" style="background:#0f1117;border:1px solid #2d3148;
+          color:#e2e8f0;padding:.3rem .6rem;border-radius:6px;font-size:.85rem;width:90px">
+        <input id="wl-isin" placeholder="ISIN (optional)" maxlength="12" style="background:#0f1117;border:1px solid #2d3148;
+          color:#e2e8f0;padding:.3rem .6rem;border-radius:6px;font-size:.85rem;width:130px;text-transform:uppercase">
+        <button onclick="addWatchlist()" style="padding:.3rem .7rem;background:#2d3148;
+          color:#e2e8f0;border:none;border-radius:6px;cursor:pointer">+</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Symbol</th><th></th></tr></thead>
+      <tbody id="watchlist-tbody"><tr><td colspan="2" class="empty">Leer</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ORDERS ────────────────────────────────────────────────── -->
+<div id="sec-orders" class="section">
+  <div class="card">
+    <div class="card-head">Order-Log</div>
+    <table>
+      <thead><tr><th>Zeit</th><th>Symbol</th><th>Aktion</th><th>Stück</th><th>Preis</th><th>Status</th></tr></thead>
+      <tbody id="orders-tbody"><tr><td colspan="6" class="empty">Keine Orders</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MARKT-SCAN ────────────────────────────────────────────── -->
+<div id="sec-market" class="section">
+
+  <!-- Header-Leiste -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:.75rem">
+    <div>
+      <div style="font-size:1rem;font-weight:600;color:#e2e8f0">KI Markt-Scan</div>
+      <div style="font-size:.8rem;color:#475569;margin-top:.15rem" id="market-subtitle">
+        Analysiert ~30 Aktien + deine Watchlist auf Kaufpotenzial
+      </div>
+    </div>
+    <button id="btn-market-scan" onclick="startMarketScan()"
+      style="padding:.5rem 1.2rem;background:linear-gradient(135deg,#7c83ff,#a78bfa);
+             color:#fff;border:none;border-radius:8px;cursor:pointer;
+             font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:.5rem">
+      <span id="market-btn-icon">🔍</span>
+      <span id="market-btn-label">Scan starten</span>
+    </button>
+  </div>
+
+  <!-- Progress-Bar -->
+  <div id="market-progress-wrap" style="display:none;margin-bottom:1.2rem">
+    <div style="display:flex;justify-content:space-between;font-size:.8rem;
+                color:#64748b;margin-bottom:.4rem">
+      <span id="market-progress-label">Analysiere…</span>
+      <span id="market-progress-pct">0%</span>
+    </div>
+    <div style="background:#1a1d27;border-radius:999px;height:6px;overflow:hidden">
+      <div id="market-progress-fill"
+           style="height:100%;background:linear-gradient(90deg,#7c83ff,#a78bfa);
+                  border-radius:999px;transition:width .4s;width:0%"></div>
+    </div>
+  </div>
+
+  <!-- KPI-Zeile -->
+  <div class="kpi-grid" style="margin-bottom:1.2rem">
+    <div class="kpi"><div class="label">BUY-Kandidaten</div>
+      <div class="value pos" id="mk-buy">–</div></div>
+    <div class="kpi"><div class="label">WATCH-Kandidaten</div>
+      <div class="value" id="mk-watch">–</div></div>
+    <div class="kpi"><div class="label">Analysiert</div>
+      <div class="value" id="mk-total">–</div></div>
+    <div class="kpi"><div class="label">Letzter Scan</div>
+      <div class="value" id="mk-ts" style="font-size:.9rem">–</div></div>
+  </div>
+
+  <!-- Tabs: Universum | Discovery -->
+  <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+    <button id="tab-universe" onclick="switchMarketTab('universe')"
+      style="padding:.4rem 1rem;border-radius:6px;border:none;cursor:pointer;
+             font-size:.85rem;font-weight:600;background:#7c83ff;color:#fff">
+      📋 Universum-Scan
+    </button>
+    <button id="tab-discover" onclick="switchMarketTab('discover')"
+      style="padding:.4rem 1rem;border-radius:6px;border:none;cursor:pointer;
+             font-size:.85rem;font-weight:600;background:#1e2235;color:#64748b">
+      🌐 KI-Discovery
+    </button>
+    <button id="tab-penny" onclick="switchMarketTab('penny')"
+      style="padding:.4rem 1rem;border-radius:6px;border:none;cursor:pointer;
+             font-size:.85rem;font-weight:600;background:#1e2235;color:#64748b">
+      💎 Pennystocks
+    </button>
+  </div>
+
+  <!-- Universum-Ergebnisse -->
+  <div id="panel-universe">
+    <div class="card">
+      <div class="card-head">Kaufkandidaten (Universum)
+        <span style="font-size:.78rem;font-weight:400;color:#475569">sortiert nach Konfidenz</span>
+      </div>
+      <div id="market-results-body">
+        <div class="empty" style="padding:2.5rem;text-align:center;color:#475569">
+          Noch kein Scan – „Scan starten" klicken.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Discovery-Panel -->
+  <div id="panel-discover" style="display:none">
+
+    <!-- Discovery-Startbereich -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-head">🌐 KI-Discovery – Freie Marktsuche</div>
+      <div style="padding:1rem 1rem .5rem;color:#94a3b8;font-size:.85rem;line-height:1.6">
+        Die KI analysiert <strong style="color:#e2e8f0">eigenständig</strong>, welche
+        Branchen &amp; Trends in den nächsten 3–12 Monaten das größte Kurspotenzial haben –
+        ohne vorgegebene Symbole. Es entstehen 5 Megatrends mit je 4–6 konkreten Aktien.
+      </div>
+      <div style="padding:.5rem 1rem 1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <button id="btn-discover" onclick="startDiscovery()"
+          style="padding:.5rem 1.3rem;background:linear-gradient(135deg,#059669,#34d399);
+                 color:#fff;border:none;border-radius:8px;cursor:pointer;
+                 font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:.5rem">
+          <span id="disc-btn-icon">🌐</span>
+          <span id="disc-btn-label">Discovery starten</span>
+        </button>
+        <span id="disc-phase-badge" style="display:none;padding:.3rem .8rem;
+          background:#1e3a2e;color:#34d399;border-radius:20px;font-size:.78rem"></span>
+      </div>
+      <!-- Discovery Progress -->
+      <div id="disc-progress-wrap" style="display:none;padding:0 1rem 1rem">
+        <div style="display:flex;justify-content:space-between;
+                    font-size:.78rem;color:#64748b;margin-bottom:.35rem">
+          <span id="disc-progress-label">Identifiziere Trends…</span>
+          <span id="disc-progress-pct">0%</span>
+        </div>
+        <div style="background:#1a1d27;border-radius:999px;height:5px;overflow:hidden">
+          <div id="disc-progress-fill"
+               style="height:100%;background:linear-gradient(90deg,#059669,#34d399);
+                      border-radius:999px;transition:width .5s;width:0%"></div>
+        </div>
+        <div id="disc-progress-sym" style="font-size:.75rem;color:#475569;margin-top:.3rem"></div>
+      </div>
+    </div>
+
+    <!-- Themen-Karten -->
+    <div id="disc-themes" style="margin-bottom:1rem"></div>
+
+    <!-- Kandidaten-Tabelle -->
+    <div class="card">
+      <div class="card-head">Discovery-Kandidaten
+        <span style="font-size:.78rem;font-weight:400;color:#475569">nach Konfidenz sortiert</span>
+      </div>
+      <div id="disc-results-body">
+        <div class="empty" style="padding:2rem;text-align:center;color:#475569">
+          Noch keine Discovery – oben „Discovery starten" klicken.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pennystock-Panel -->
+  <div id="panel-penny" style="display:none">
+    <div class="card" style="margin-bottom:1rem;border:1px solid #7c2d12">
+      <div class="card-head" style="color:#fb923c">💎 Pennystock-Discovery – Hochspekulativ</div>
+      <div style="padding:.75rem 1rem;background:#1c0f09;border-radius:0 0 8px 8px">
+        <div style="color:#fb923c;font-size:.82rem;line-height:1.6;margin-bottom:.75rem">
+          ⚠️ <strong>Risikohinweis:</strong> Pennystocks sind hochspekulative Investments mit
+          erhöhtem Verlustrisiko bis hin zum Totalverlust. Nur mit Kapital investieren,
+          das du dir leisten kannst zu verlieren. Niemals mehr als 1–2% des Depots pro Position.
+        </div>
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+          <button id="btn-penny" onclick="startPenny()"
+            style="padding:.5rem 1.3rem;background:linear-gradient(135deg,#b45309,#f97316);
+                   color:#fff;border:none;border-radius:8px;cursor:pointer;
+                   font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:.5rem">
+            <span id="penny-btn-icon">💎</span>
+            <span id="penny-btn-label">Pennystock-Scan starten</span>
+          </button>
+          <span id="penny-phase-badge" style="display:none;padding:.3rem .8rem;
+            background:#431407;color:#fb923c;border-radius:20px;font-size:.78rem"></span>
+        </div>
+        <div id="penny-progress-wrap" style="display:none;margin-top:.75rem">
+          <div style="display:flex;justify-content:space-between;
+                      font-size:.78rem;color:#78350f;margin-bottom:.35rem">
+            <span id="penny-progress-label">Suche Kandidaten…</span>
+            <span id="penny-progress-pct">0%</span>
+          </div>
+          <div style="background:#1a1d27;border-radius:999px;height:5px;overflow:hidden">
+            <div id="penny-progress-fill"
+                 style="height:100%;background:linear-gradient(90deg,#b45309,#f97316);
+                        border-radius:999px;transition:width .5s;width:0%"></div>
+          </div>
+          <div id="penny-progress-sym" style="font-size:.75rem;color:#78350f;margin-top:.25rem"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI -->
+    <div class="kpi-grid" style="margin-bottom:1rem">
+      <div class="kpi"><div class="label">Spec. BUY</div>
+        <div class="value" style="color:#fb923c" id="pk-buy">–</div></div>
+      <div class="kpi"><div class="label">WATCH</div>
+        <div class="value" id="pk-watch">–</div></div>
+      <div class="kpi"><div class="label">Analysiert</div>
+        <div class="value" id="pk-total">–</div></div>
+      <div class="kpi"><div class="label">Letzter Scan</div>
+        <div class="value" style="font-size:.85rem" id="pk-ts">–</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">💎 Pennystock-Kandidaten
+        <span style="font-size:.78rem;font-weight:400;color:#475569">nach Konfidenz sortiert</span>
+      </div>
+      <div id="penny-results-body">
+        <div class="empty" style="padding:2rem;text-align:center;color:#475569">
+          Noch kein Scan – oben „Pennystock-Scan starten" klicken.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ANALYSE ───────────────────────────────────────────────── -->
+<div id="sec-analysis" class="section">
+  <div class="card">
+    <div class="card-head">Unternehmensanalyse per ISIN
+      <span style="font-weight:400;color:#64748b;font-size:.78rem">News · Marktkapitalisierung · Management · Berichte · KI-Ausblick</span>
+    </div>
+    <div style="padding:1rem;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+      <input id="an-isin" placeholder="ISIN, z.B. DE0007164600" maxlength="12"
+        style="background:#0f1117;border:1px solid #2d3148;color:#e2e8f0;padding:.45rem .7rem;
+               border-radius:6px;font-size:.9rem;width:240px;text-transform:uppercase"
+        onkeydown="if(event.key==='Enter')startAnalysis()">
+      <button id="an-btn" onclick="startAnalysis()"
+        style="padding:.45rem 1rem;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">
+        Analysieren</button>
+      <span id="an-status" style="color:#94a3b8;font-size:.85rem"></span>
+    </div>
+    <div style="padding:0 1rem 1rem;color:#64748b;font-size:.75rem">
+      Live-Daten gibt es mit Claude (eigene Websuche), mit Ollama/NVIDIA + Tavily-Key (Websuche) oder mit Hermes (eigene Tools). Dauer ca. 1–5 Minuten, teils mit API-Kosten. Ohne Websuche nutzt das Modell nur sein Trainingswissen.
+    </div>
+  </div>
+  <div id="an-result"></div>
+  <div class="card">
+    <div class="card-head">Bisherige Analysen
+      <button id="an-cmp-btn" disabled onclick="compareTwo()" style="padding:.25rem .8rem;background:#4f46e5;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:.78rem;opacity:.5">Zwei vergleichen</button></div>
+    <table>
+      <thead><tr><th></th><th>Zeitpunkt</th><th>Unternehmen</th><th>ISIN</th><th>Daten</th><th></th></tr></thead>
+      <tbody id="an-history"><tr><td colspan="6" class="empty">Noch keine Analysen</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PORTFOLIO-SICHT ───────────────────────────────────────── -->
+<div id="sec-pview" class="section"><div id="pview-body"><div class="empty">Lade…</div></div></div>
+
+<!-- KALENDER ──────────────────────────────────────────────── -->
+<div id="sec-calendar" class="section"><div id="cal-body"><div class="empty">Lade…</div></div></div>
+
+<!-- BACKUP ────────────────────────────────────────────────── -->
+<div id="sec-backup" class="section"><div id="backup-body"><div class="empty">Lade…</div></div></div>
+
+<!-- EINSTELLUNGEN ─────────────────────────────────────────── -->
+<div id="sec-settings" class="section">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <span style="color:#64748b;font-size:.85rem">
+      Änderungen werden sofort übernommen (in DB + Umgebungsvariablen).
+    </span>
+    <button onclick="saveAllSettings()"
+      style="padding:.45rem 1.1rem;background:#7c83ff;color:#fff;border:none;
+             border-radius:7px;cursor:pointer;font-size:.85rem;font-weight:600">
+      💾 Alle speichern
+    </button>
+  </div>
+  <div id="settings-groups"></div>
+</div>
+
+</main>
+
+<!-- RUN MODAL ─────────────────────────────────────────────── -->
+<div id="run-modal">
+  <div class="run-box">
+    <div id="run-modal-title">Agent-Run läuft…</div>
+    <div id="run-steps">
+      <div class="run-step" id="step-connect">
+        <div class="step-icon">⏳</div><span>IBKR-Verbindung aufbauen</span>
+      </div>
+      <div class="run-step" id="step-portfolio">
+        <div class="step-icon">⏳</div><span>Portfolio-Daten abrufen</span>
+      </div>
+      <div class="run-step" id="step-market">
+        <div class="step-icon">⏳</div><span>Marktdaten & News laden</span>
+      </div>
+      <div class="run-step" id="step-llm">
+        <div class="step-icon">⏳</div><span>KI-Analyse</span>
+      </div>
+      <div class="run-step" id="step-actions">
+        <div class="step-icon">⏳</div><span>Aktionen berechnen</span>
+      </div>
+      <div class="run-step" id="step-save">
+        <div class="step-icon">⏳</div><span>Ergebnis speichern</span>
+      </div>
+    </div>
+    <div class="run-progress">
+      <div class="run-progress-fill" id="run-progress-fill" style="width:0%"></div>
+    </div>
+    <div class="run-meta">
+      <span id="run-eta">Schritt 0 / 6</span>
+      <span id="run-elapsed"></span>
+    </div>
+  </div>
+</div>
+
+<div id="toast-area"></div>
+
+<script>
+// ── Helpers ──────────────────────────────────────────────────
+const STEP_IDS = ['step-connect','step-portfolio','step-market',
+                  'step-llm','step-actions','step-save'];
+
+// Kennungen unter dem Symbol: ISIN · WKN · conId (KI-genannte ISINs mit Hinweis)
+function idLine(x) {
+  const parts = [];
+  if (x.isin) parts.push(`ISIN <span style="user-select:all">${x.isin}</span>`);
+  if (x.wkn)  parts.push(`WKN <span style="user-select:all">${x.wkn}</span>`);
+  if (x.conid) parts.push(`conId ${x.conid}`);
+  if (/^[A-Z]{2}[A-Z0-9]{10}$/.test(x.isin || ''))
+    parts.push(`<a href="#" data-isin="${x.isin}" onclick="analyseIsin(this.dataset.isin);return false" style="color:#60a5fa;text-decoration:none">🏢 Analyse</a>`);
+  if (!parts.length) return x._pennystock
+    ? '<div style="font-size:.7rem;color:#64748b;margin-top:.1rem">ISIN: nicht ermittelbar</div>' : '';
+  const tip = x.ids_source === 'KI' ? ' title="Von der KI genannt (Prüfsumme gültig) – bitte gegenprüfen"' : '';
+  return `<div style="font-size:.7rem;color:#64748b;margin-top:.1rem"${tip}>${parts.join(' · ')}${x.ids_source==='KI'?' ⚠':x.ids_source==='IBKR'?' ✓':''}</div>`;
+}
+
+async function api(url, opts={}) {
+  const r = await fetch(url, {headers:{'Content-Type':'application/json'}, ...opts});
+  if (!r.ok) {
+    const t = await r.text().catch(()=>'');
+    throw new Error(`HTTP ${r.status}: ${t.slice(0,120)}`);
+  }
+  return _esc(await r.json());
+}
+
+// LLM-/DB-Texte nie als HTML interpretieren: alle Strings der API-Antwort escapen
+function _esc(v) {
+  if (typeof v === 'string')
+    return v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  if (Array.isArray(v)) return v.map(_esc);
+  if (v && typeof v === 'object')
+    return Object.fromEntries(Object.entries(v).map(([k,x]) => [k, _esc(x)]));
+  return v;
+}
+
+function fmt(n, dec=2) {
+  if (n == null) return '–';
+  return Number(n).toLocaleString('de-DE', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+}
+
+function ts(iso) {
+  if (!iso) return '–';
+  return new Date(iso).toLocaleString('de-DE', {
+    day:'2-digit', month:'2-digit', year:'numeric',
+    hour:'2-digit', minute:'2-digit'
+  });
+}
+
+// api() escaped Strings (&quot; etc.); fuer textContent muessen sie zurueck in Klartext
+function _unesc(s) {
+  return String(s).replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&');
+}
+
+function toast(msg, type='ok') {
+  const d = document.createElement('div');
+  d.className = 'toast' + (type !== 'ok' ? ' '+type : '');
+  d.textContent = _unesc(msg);
+  document.getElementById('toast-area').appendChild(d);
+  setTimeout(()=>d.remove(), 4000);
+}
+
+function showSection(id, btn) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id==='portfolio') loadPortfolio();
+  if (id==='actions')   loadActions();
+  if (id==='history')   loadHistory();
+  if (id==='watchlist') loadWatchlist();
+  if (id==='orders')    loadOrders();
+  if (id==='settings')  loadSettings();
+  if (id==='market')    loadMarketResults();
+  if (id==='analysis')  loadAnalysisHistory();
+  if (id==='pview')     loadPView();
+  if (id==='calendar')  loadCalendar();
+  if (id==='backup')    loadBackups();
+}
+
+// ── Overview ─────────────────────────────────────────────────
+async function loadOverview() {
+  try {
+    const run = await api('/api/runs/latest');
+    if (!run || !run.id) return;
+
+    document.getElementById('last-run-ts').textContent  = 'Letzter Run: ' + ts(run.timestamp);
+    document.getElementById('last-run-view').innerHTML = run.market_view || '';
+    document.getElementById('run-status').textContent    = ts(run.timestamp);
+    document.getElementById('overview-summary').innerHTML = run.summary || '–';
+
+    const pos   = run.positions || [];
+    const total = pos.reduce((s,p)=>s+p.market_value, 0);
+    const pnl   = pos.reduce((s,p)=>s+p.unrealized_pnl, 0);
+
+    document.getElementById('kpi-value').textContent = fmt(total) + ' USD';
+    const pnlEl = document.getElementById('kpi-pnl');
+    pnlEl.textContent  = (pnl>=0?'+':'') + fmt(pnl) + ' USD';
+    pnlEl.className    = 'value ' + (pnl>=0?'pos':'neg');
+    document.getElementById('kpi-pos').textContent  = pos.length;
+    document.getElementById('kpi-view').innerHTML = run.market_view || '–';
+
+  } catch(e) {
+    console.error('loadOverview:', e);
+  }
+}
+
+// ── Portfolio ─────────────────────────────────────────────────
+async function loadPortfolio() {
+  try {
+    const run = await api('/api/runs/latest');
+    const pos = run?.positions || [];
+    const tb  = document.getElementById('positions-tbody');
+    if (!pos.length) {
+      tb.innerHTML = '<tr><td colspan="8" class="empty">Keine Positionen vorhanden</td></tr>';
+      return;
+    }
+    tb.innerHTML = pos.map(p => `
+      <tr>
+        <td><strong>${p.symbol}</strong>${idLine(p)}</td>
+        <td>${fmt(p.quantity,0)}</td>
+        <td>${fmt(p.avg_cost)}</td>
+        <td>${fmt(p.current_price)}</td>
+        <td>${fmt(p.market_value)}</td>
+        <td class="${p.unrealized_pnl>=0?'':''}">
+          <span style="color:${p.unrealized_pnl>=0?'#4ade80':'#f87171'}">
+            ${(p.unrealized_pnl>=0?'+':'')+fmt(p.unrealized_pnl)}
+          </span>
+        </td>
+        <td>${(p.weight*100).toFixed(1)}%</td>
+        <td>${p.currency}</td>
+      </tr>`).join('');
+  } catch(e) {
+    console.error('loadPortfolio:', e);
+  }
+}
+
+// ── Actions + Analyse ─────────────────────────────────────────
+async function loadActions() {
+  try {
+    // Letzten Run laden für Analyse-Zusammenfassung
+    const run = await api('/api/runs/latest');
+    if (run && run.id) {
+      const pos  = run.positions || [];
+      const acts = run.actions   || [];
+      const buys  = acts.filter(a=>a.action==='BUY').length;
+      const sells = acts.filter(a=>a.action==='SELL').length;
+      const holds = pos.length - buys - sells;
+      document.getElementById('an-total').textContent = pos.length;
+      document.getElementById('an-buy').textContent   = buys;
+      document.getElementById('an-hold').textContent  = Math.max(0,holds);
+      document.getElementById('an-sell').textContent  = sells;
+      document.getElementById('analyse-ts').textContent = ts(run.timestamp);
+      document.getElementById('analyse-summary-text').innerHTML = run.summary || '';
+    }
+
+    // Alle Aktionen (offen) für Detail-Tabelle
+    const actions = await api('/api/actions');
+    const tb = document.getElementById('actions-tbody');
+    if (!actions.length && (!run || !(run.actions||[]).length)) {
+      tb.innerHTML = '<tr><td colspan="6" class="empty">Noch keine Analyse – Run starten</td></tr>';
+      return;
+    }
+
+    // Aktionen aus dem letzten Run anzeigen (inkl. bereits genehmigter)
+    const allActions = (run && run.actions) ? run.actions : actions;
+    if (!allActions.length) {
+      tb.innerHTML = '<tr><td colspan="6" class="empty">Alle Positionen: HOLD – keine Aktionen nötig</td></tr>';
+      return;
+    }
+
+    tb.innerHTML = allActions.map(a => {
+      const confColor = a.confidence >= 0.7 ? '#4ade80'
+                      : a.confidence >= 0.5 ? '#fbbf24' : '#f87171';
+      const riskBadge = a.risk_blocked
+        ? '<span style="color:#f87171;font-size:.75rem">⛔ Risiko-Block</span>' : '';
+      return `<tr>
+        <td><strong>${a.symbol}</strong>${idLine(a)}</td>
+        <td><span class="tag ${(a.action||'').toLowerCase()}">${a.action}</span></td>
+        <td style="color:${confColor}">${((a.confidence||0)*100).toFixed(0)}%</td>
+        <td>
+          ${a.risk_blocked
+            ? '<span class="tag" style="background:#450a0a;color:#f87171">HIGH ⛔</span>'
+            : '<span class="tag" style="background:#1e3a5f;color:#60a5fa">–</span>'}
+        </td>
+        <td style="max-width:320px;color:#94a3b8;font-size:.82rem">${a.rationale||'–'}</td>
+        <td>
+          ${riskBadge}
+          ${a.risk_blocked
+            ? '<span style="color:#f87171;font-size:.8rem">⛔ geblockt</span>'
+            : !a.approved
+              ? `<button onclick="approveAction(${a.id})"
+                  style="padding:.25rem .6rem;background:#14532d;color:#4ade80;
+                         border:none;border-radius:5px;cursor:pointer;font-size:.8rem">
+                  ✓ Genehmigen</button>`
+              : !a.executed
+                ? `<button data-sym="${a.symbol}" data-act="${a.action}" onclick="executeAction(${a.id},this.dataset.sym,this.dataset.act)"
+                    style="padding:.25rem .6rem;background:#1e3a5f;color:#60a5fa;
+                           border:none;border-radius:5px;cursor:pointer;font-size:.8rem">
+                    ▶ Ausführen</button>`
+                : '<span style="color:#4ade80;font-size:.8rem">✅ Ausgeführt</span>'
+          }
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error('loadActions:', e);
+  }
+}
+
+async function approveAction(id) {
+  try {
+    const r = await api(`/api/actions/${id}/approve`, {method:'POST'});
+    toast(r.message || 'Aktion genehmigt');
+    loadActions();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function executeAction(id, symbol, action) {
+  try {
+    const p = await api(`/api/actions/${id}/preview`);
+    if (p.blocked) { toast(`${action} ${symbol}: ${p.blocked}`, 'error'); return; }
+    const txt = `${action} ${symbol}${p.dry_run ? '  (DRY-RUN: nur Simulation)' : '  ⚠️ ECHTE ORDER'}\n\n` +
+      p.steps.join('\n') + `\n\nGeschätzter Wert: ${fmt(p.value)}\n\n` +
+      `Stückzahl bestätigen oder verringern (max. ${p.quantity}):`;
+    const ans = prompt(txt, String(p.quantity));
+    if (ans === null) return;
+    const qty = parseInt(ans, 10);
+    if (!(qty >= 1 && qty <= p.quantity)) { toast(`Stückzahl muss 1–${p.quantity} sein`, 'error'); return; }
+    const r = await api(`/api/actions/${id}/execute`, {method:'POST', body: JSON.stringify({quantity: qty})});
+    toast(r.message || `${action} ${symbol} ausgeführt`, r.dry_run ? 'warn' : 'ok');
+    loadActions();
+    loadOrders();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── History ───────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const runs = await api('/api/runs');
+    const tb   = document.getElementById('history-tbody');
+    if (!runs.length) {
+      tb.innerHTML = '<tr><td colspan="4" class="empty">Keine Einträge</td></tr>';
+      return;
+    }
+    tb.innerHTML = runs.map(r => `
+      <tr>
+        <td>${r.id}</td>
+        <td>${ts(r.timestamp)}</td>
+        <td><span class="tag ${r.market_view||'neutral'}">${r.market_view||'–'}</span></td>
+        <td style="color:#94a3b8;max-width:400px">${(r.summary||'–').slice(0,120)}</td>
+      </tr>`).join('');
+  } catch(e) {
+    console.error('loadHistory:', e);
+  }
+}
+
+// ── Watchlist ─────────────────────────────────────────────────
+async function loadWatchlist() {
+  try {
+    const items = await api('/api/watchlist');
+    const tb    = document.getElementById('watchlist-tbody');
+    if (!items.length) {
+      tb.innerHTML = '<tr><td colspan="2" class="empty">Leer</td></tr>';
+      return;
+    }
+    tb.innerHTML = items.map(i => `
+      <tr>
+        <td><strong>${i.symbol}</strong>${idLine(i)}</td>
+        <td><button data-sym="${i.symbol}" onclick="removeWatchlist(this.dataset.sym)"
+          style="padding:.2rem .5rem;background:#450a0a;color:#f87171;
+                 border:none;border-radius:4px;cursor:pointer;font-size:.8rem">
+          Entfernen</button></td>
+      </tr>`).join('');
+  } catch(e) {
+    console.error('loadWatchlist:', e);
+  }
+}
+
+async function addWatchlist() {
+  const sym = document.getElementById('wl-input').value.trim().toUpperCase();
+  const isin = document.getElementById('wl-isin').value.trim().toUpperCase();
+  if (!sym) return;
+  try {
+    await api('/api/watchlist',{method:'POST',body:JSON.stringify({symbol:sym, isin})});
+    document.getElementById('wl-input').value='';
+    document.getElementById('wl-isin').value='';
+    toast(sym+' hinzugefügt');
+    loadWatchlist();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+async function removeWatchlist(sym) {
+  try {
+    await api(`/api/watchlist/${sym}`,{method:'DELETE'});
+    toast(sym+' entfernt');
+    loadWatchlist();
+  } catch(e) { toast(e.message,'error'); }
+}
+
+// ── Orders ────────────────────────────────────────────────────
+async function loadOrders() {
+  try {
+    const orders = await api('/api/orders');
+    const tb     = document.getElementById('orders-tbody');
+    if (!orders.length) {
+      tb.innerHTML = '<tr><td colspan="6" class="empty">Keine Orders</td></tr>';
+      return;
+    }
+    tb.innerHTML = orders.map(o => `
+      <tr>
+        <td>${ts(o.timestamp)}</td>
+        <td><strong>${o.symbol}</strong>${idLine(o)}</td>
+        <td><span class="tag ${o.action.toLowerCase()}">${o.action}</span></td>
+        <td>${fmt(o.quantity,0)}</td>
+        <td>${fmt(o.price)}</td>
+        <td>${o.status}</td>
+      </tr>`).join('');
+  } catch(e) {
+    console.error('loadOrders:', e);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RUN MODAL – echte Status-Poll-Logik (keine fake Animation)
+// ══════════════════════════════════════════════════════════════
+let _pollTimer   = null;
+let _elapsedTimer = null;
+
+function _resetModal() {
+  STEP_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'run-step';
+    el.querySelector('.step-icon').innerHTML = '⏳';
+  });
+  document.getElementById('run-progress-fill').style.width = '0%';
+  document.getElementById('run-eta').textContent     = 'Schritt 0 / 6';
+  document.getElementById('run-elapsed').textContent = '';
+  document.getElementById('run-modal-title').textContent = 'Agent-Run läuft…';
+}
+
+function _openModal()  { _resetModal(); document.getElementById('run-modal').classList.add('open'); }
+function _closeModal() {
+  document.getElementById('run-modal').classList.remove('open');
+  if (_pollTimer)    { clearInterval(_pollTimer);    _pollTimer = null; }
+  if (_elapsedTimer) { clearInterval(_elapsedTimer); _elapsedTimer = null; }
+}
+
+function _applyState(state) {
+  const step    = state.step    || 0;
+  const total   = state.total   || 6;
+  const running = state.running || false;
+  const err     = state.error   || null;
+
+  STEP_IDS.forEach((sid, i) => {
+    const el   = document.getElementById(sid);
+    if (!el) return;
+    const sNum = i + 1;
+    if (err && sNum === step) {
+      el.className = 'run-step error';
+      el.querySelector('.step-icon').innerHTML = '❌';
+    } else if (sNum < step || (!running && !err && sNum <= step)) {
+      el.className = 'run-step done';
+      el.querySelector('.step-icon').innerHTML = '✅';
+    } else if (sNum === step && running) {
+      el.className = 'run-step active';
+      el.querySelector('.step-icon').innerHTML = '<div class="run-spinner"></div>';
+    } else {
+      el.className = 'run-step';
+      el.querySelector('.step-icon').innerHTML = '⏳';
+    }
+  });
+
+  const pct = step > 0 ? Math.round((step / total) * 100) : 0;
+  document.getElementById('run-progress-fill').style.width = pct + '%';
+  document.getElementById('run-eta').textContent = `Schritt ${step} / ${total}`;
+}
+
+function _startPoll(runId) {
+  const btn   = document.getElementById('btn-run');
+  const start = Date.now();
+
+  _elapsedTimer = setInterval(() => {
+    document.getElementById('run-elapsed').textContent =
+      ((Date.now() - start) / 1000).toFixed(1) + 's';
+  }, 300);
+
+  _pollTimer = setInterval(async () => {
+    try {
+      const state = await api('/api/run/status');
+      _applyState(state);
+
+      if (state.error) {
+        clearInterval(_pollTimer);    _pollTimer = null;
+        clearInterval(_elapsedTimer); _elapsedTimer = null;
+        document.getElementById('run-modal-title').textContent =
+          'Fehler: ' + state.error;
+        toast('Run-Fehler: ' + state.error, 'error');
+        await new Promise(r => setTimeout(r, 4000));
+        _closeModal();
+        btn.disabled = false; btn.textContent = '▶ Run';
+
+      } else if (!state.running && state.step >= state.total) {
+        clearInterval(_pollTimer);    _pollTimer = null;
+        clearInterval(_elapsedTimer); _elapsedTimer = null;
+        document.getElementById('run-modal-title').textContent = 'Run abgeschlossen ✓';
+        document.getElementById('run-progress-fill').style.width = '100%';
+        document.getElementById('run-eta').textContent = 'Fertig – 6 / 6';
+        toast('Agent-Run abgeschlossen ✓');
+        document.getElementById('run-status').textContent =
+          ts(new Date().toISOString());
+        await new Promise(r => setTimeout(r, 2000));
+        _closeModal();
+        loadOverview();
+        btn.disabled = false; btn.textContent = '▶ Run';
+      }
+    } catch (e) {
+      // Netzwerkfehler im Poll ignorieren – nächster Versuch in 2s
+    }
+  }, 2000);
+}
+
+async function triggerRun() {
+  const btn = document.getElementById('btn-run');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = '…';
+
+  try {
+    // Lauft bereits?
+    const cur = await api('/api/run/status');
+    if (cur.running) {
+      _openModal(); _startPoll(cur.run_id); return;
+    }
+
+    const resp = await api('/api/run', {method: 'POST'});
+    if (!resp.ok) throw new Error(resp.message || 'Unbekannter Fehler');
+    _openModal();
+    _startPoll(resp.run_id);
+
+  } catch (e) {
+    toast('Fehler: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = '▶ Run';
+  }
+}
+
+// ── Settings ──────────────────────────────────────────────────
+let _schema   = [];
+let _settVals = {};
+
+async function loadSettings() {
+  try {
+    [_schema, _settVals] = await Promise.all([
+      api('/api/settings/schema'),
+      api('/api/settings'),
+    ]);
+
+    // nach Gruppe gruppieren
+    const groups = {};
+    for (const s of _schema) {
+      if (!groups[s.group]) groups[s.group] = [];
+      groups[s.group].push(s);
+    }
+
+    const container = document.getElementById('settings-groups');
+    container.innerHTML = '';
+
+    for (const [groupName, items] of Object.entries(groups)) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.marginBottom = '1rem';
+
+      let rows = '';
+      for (const item of items) {
+        const val  = _settVals[item.key] ?? '';
+        const type = item.type === 'password' ? 'password'
+                   : item.type === 'number'   ? 'text'
+                   : item.type === 'bool'     ? 'text'
+                   : 'text';
+        const isDry = item.key === 'IBKR_DRY_RUN';
+        rows += `
+          <tr${item.providers ? ` data-providers="${item.providers.join(',')}"` : ''}>
+            <td style="width:220px;color:#94a3b8;padding:.6rem 1rem;font-size:.85rem">
+              ${item.label}
+              ${isDry ? '<br><span style="color:#fbbf24;font-size:.75rem">⚠️ false = echte Orders!</span>' : ''}
+            </td>
+            <td style="padding:.5rem 1rem">
+              ${item.type === 'select'
+                ? `<select id="sett_${item.key}"
+                     style="background:#0f1117;border:1px solid #2d3148;color:#e2e8f0;
+                            padding:.35rem .6rem;border-radius:6px;font-size:.85rem;width:100%;max-width:400px">
+                     ${item.options.map(o => `<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}
+                   </select>`
+                : item.type === 'bool'
+                ? `<select id="sett_${item.key}"
+                     style="background:#0f1117;border:1px solid #2d3148;color:#e2e8f0;
+                            padding:.35rem .6rem;border-radius:6px;font-size:.85rem;width:100%">
+                     <option value="true"  ${val==='true' ?'selected':''}>true</option>
+                     <option value="false" ${val==='false'?'selected':''}>false</option>
+                   </select>`
+                : `<input id="sett_${item.key}" type="${type}" value="${val}"
+                     style="background:#0f1117;border:1px solid #2d3148;color:#e2e8f0;
+                            padding:.35rem .6rem;border-radius:6px;font-size:.85rem;
+                            width:100%;max-width:400px">`
+              }
+            </td>
+            <td style="padding:.5rem .75rem">
+              <button onclick="saveSingleSetting('${item.key}')"
+                style="padding:.25rem .6rem;background:#2d3148;color:#94a3b8;
+                       border:none;border-radius:5px;cursor:pointer;font-size:.8rem">
+                ✓
+              </button>
+            </td>
+          </tr>`;
+      }
+
+      card.innerHTML = `
+        <div class="card-head">${groupName}${groupName === 'KI-Modell'
+          ? ` <button onclick="testLLM(this)" style="float:right;padding:.2rem .7rem;background:#2d3148;color:#e2e8f0;border:none;border-radius:5px;cursor:pointer;font-size:.8rem">Verbindung testen</button>`
+          : ''}</div>
+        <table style="width:100%"><tbody>${rows}</tbody></table>`;
+      container.appendChild(card);
+    }
+    const sel = document.getElementById('sett_LLM_PROVIDER');
+    if (sel) { sel.onchange = applyProviderVisibility; applyProviderVisibility(); }
+  } catch(e) {
+    console.error('loadSettings:', e);
+  }
+}
+
+// Unter "KI-Modell" nur Felder zeigen, die der gewählte KI-Provider braucht
+function applyProviderVisibility() {
+  const p = document.getElementById('sett_LLM_PROVIDER')?.value;
+  document.querySelectorAll('#settings-groups tr[data-providers]').forEach(tr => {
+    tr.style.display = tr.dataset.providers.split(',').includes(p) ? '' : 'none';
+  });
+}
+
+async function testLLM(btn) {
+  btn.disabled = true; const old = btn.textContent; btn.textContent = 'teste…';
+  try {
+    await saveAllSettings();
+    const r = await api('/api/settings/test-llm', { method: 'POST' });
+    toast(r.ok ? `${r.provider}: OK (${r.latency_ms} ms)` : `${r.provider}: ${r.error}`, r.ok ? undefined : 'error');
+  } catch(e) { toast(e.message, 'error'); }
+  btn.disabled = false; btn.textContent = old;
+}
+
+async function saveSingleSetting(key) {
+  const el = document.getElementById('sett_' + key);
+  if (!el) return;
+  try {
+    await api('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({ key, value: el.value }),
+    });
+    toast(`${key} gespeichert`);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveAllSettings() {
+  const settings = {};
+  for (const s of _schema) {
+    const el = document.getElementById('sett_' + s.key);
+    if (el) settings[s.key] = el.value;
+  }
+  try {
+    const r = await api('/api/settings/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ settings }),
+    });
+    toast(`${Object.keys(r.saved).length} Einstellungen gespeichert ✓`);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── Markt-Scan ────────────────────────────────────────────────
+let _marketPollTimer = null;
+
+function _renderMarketResults(results, timestamp, totalAnalysed) {
+  const buys   = results.filter(r => r.recommendation === 'BUY').length;
+  const watches = results.filter(r => r.recommendation === 'WATCH').length;
+  document.getElementById('mk-buy').textContent   = buys;
+  document.getElementById('mk-watch').textContent = watches;
+  document.getElementById('mk-total').textContent = totalAnalysed || results.length;
+  document.getElementById('mk-ts').textContent    = timestamp ? ts(timestamp) : '–';
+
+  const body = document.getElementById('market-results-body');
+  if (!results.length) {
+    body.innerHTML = '<div class="empty" style="padding:2rem;text-align:center;color:#475569">Keine Kaufkandidaten gefunden.</div>';
+    return;
+  }
+
+  const rows = results.map(r => {
+    const isBuy   = r.recommendation === 'BUY';
+    const conf    = r.confidence || 0;
+    const confCol = conf >= 0.7 ? '#4ade80' : conf >= 0.5 ? '#fbbf24' : '#f87171';
+    const riskCol = r.risk_level === 'LOW' ? '#4ade80'
+                  : r.risk_level === 'HIGH' ? '#f87171' : '#fbbf24';
+    const catalysts = (r.catalysts || []).slice(0,2).map(c =>
+      `<span style="display:inline-block;background:#1e3a5f;color:#60a5fa;
+               font-size:.73rem;padding:.1rem .45rem;border-radius:4px;
+               margin:.1rem .2rem 0 0">${c}</span>`).join('');
+
+    return `<tr>
+      <td style="padding:.75rem 1rem">
+        <strong style="font-size:.95rem">${r.symbol}</strong>${idLine(r)}
+        <div style="font-size:.75rem;color:#64748b">${r.sector||'–'}</div>
+      </td>
+      <td style="padding:.75rem .5rem">
+        <span class="tag ${isBuy?'buy':'hold'}" style="${isBuy?'':'background:#1a3354;color:#93c5fd'}">
+          ${r.recommendation}
+        </span>
+      </td>
+      <td style="padding:.75rem .5rem;color:${confCol};font-weight:600">
+        ${(conf*100).toFixed(0)}%
+      </td>
+      <td style="padding:.75rem .5rem">
+        <span style="color:${riskCol};font-size:.8rem">${r.risk_level||'–'}</span>
+      </td>
+      <td style="padding:.75rem .5rem;font-size:.75rem;color:#64748b">
+        ${r.target_horizon||'–'}
+      </td>
+      <td style="padding:.75rem 1rem;max-width:280px">
+        <div style="color:#94a3b8;font-size:.82rem;margin-bottom:.3rem">
+          ${(r.rationale||'–').slice(0,120)}${(r.rationale||'').length>120?'…':''}
+        </div>
+        <div>${catalysts}</div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<table>
+    <thead><tr>
+      <th>Symbol</th><th>Empfehlung</th><th>Konfidenz</th>
+      <th>Risiko</th><th>Horizont</th><th>Analyse</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function loadMarketResults() {
+  try {
+    const r = await api('/api/market/results');
+    if (r.results && r.results.length > 0) {
+      _renderMarketResults(r.results, r.timestamp, r.total_analysed);
+    }
+    // Laufende Analyse wieder aufnehmen
+    const s = await api('/api/market/status');
+    if (s.running) _startMarketPoll();
+  } catch(e) { console.error('loadMarketResults:', e); }
+}
+
+function _startMarketPoll() {
+  if (_marketPollTimer) return;
+  const wrap  = document.getElementById('market-progress-wrap');
+  const fill  = document.getElementById('market-progress-fill');
+  const label = document.getElementById('market-progress-label');
+  const pct   = document.getElementById('market-progress-pct');
+  const btn   = document.getElementById('btn-market-scan');
+  const btnLbl= document.getElementById('market-btn-label');
+  const btnIco= document.getElementById('market-btn-icon');
+  wrap.style.display = 'block';
+  btn.disabled = true; btnLbl.textContent = 'Läuft…'; btnIco.textContent = '⏳';
+
+  _marketPollTimer = setInterval(async () => {
+    try {
+      const s = await api('/api/market/status');
+      const p = s.total > 0 ? Math.round((s.progress / s.total) * 100) : 0;
+      fill.style.width  = p + '%';
+      pct.textContent   = p + '%';
+      label.textContent = s.current ? `Analysiere ${s.current}…` : 'Läuft…';
+
+      if (!s.running) {
+        clearInterval(_marketPollTimer); _marketPollTimer = null;
+        wrap.style.display = 'none';
+        btn.disabled = false; btnLbl.textContent = 'Erneut scannen'; btnIco.textContent = '🔍';
+
+        if (s.error) {
+          toast('Scan-Fehler: ' + s.error, 'error');
+        } else {
+          _renderMarketResults(s.results, s.timestamp, s.progress);
+          toast(`Scan abgeschlossen – ${s.results.length} Kandidaten ✓`);
+        }
+      }
+    } catch(e) { /* Poll-Fehler ignorieren */ }
+  }, 2000);
+}
+
+async function startMarketScan() {
+  const btn = document.getElementById('btn-market-scan');
+  if (btn.disabled) return;
+  try {
+    const r = await api('/api/market/analyse', {method:'POST'});
+    toast(`Scan gestartet – ${r.symbols} Symbole`);
+    _startMarketPoll();
+  } catch(e) {
+    if (e.message.includes('409')) { _startMarketPoll(); }
+    else toast(e.message, 'error');
+  }
+}
+
+// ── Market Tab-Switch ─────────────────────────────────────────
+function switchMarketTab(tab) {
+  const panels = {universe:'panel-universe', discover:'panel-discover', penny:'panel-penny'};
+  const colors  = {universe:'#7c83ff', discover:'#059669', penny:'#f97316'};
+  Object.entries(panels).forEach(([key, id]) => {
+    document.getElementById(id).style.display = key === tab ? 'block' : 'none';
+    const btn = document.getElementById('tab-' + key);
+    if (btn) {
+      btn.style.background = key === tab ? colors[key] : '#1e2235';
+      btn.style.color      = key === tab ? '#fff'      : '#64748b';
+    }
+  });
+  if (tab === 'discover') loadDiscoveryResults();
+  if (tab === 'penny')    loadPennyResults();
+}
+
+// ── Discovery ─────────────────────────────────────────────────
+let _discPollTimer = null;
+
+function _renderThemes(themes) {
+  const el = document.getElementById('disc-themes');
+  if (!themes || !themes.length) { el.innerHTML = ''; return; }
+  el.innerHTML = themes.map(t => `
+    <div class="card" style="margin-bottom:.75rem;padding:1rem 1.2rem">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;
+                  flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
+        <div>
+          <strong style="color:#34d399;font-size:.92rem">${t.theme}</strong>
+          <span style="margin-left:.6rem;background:#1e3a2e;color:#34d399;
+                       font-size:.72rem;padding:.1rem .45rem;border-radius:4px">
+            ${t.sector||''}
+          </span>
+        </div>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+          ${(t.symbols||[]).map(s => `<span style="background:#1e3a5f;color:#60a5fa;
+            font-size:.72rem;padding:.1rem .45rem;border-radius:4px">${s}</span>`).join('')}
+        </div>
+      </div>
+      <div style="color:#94a3b8;font-size:.82rem;margin-bottom:.35rem">${t.rationale||''}</div>
+      ${t.catalyst ? `<div style="color:#fbbf24;font-size:.78rem">⚡ ${t.catalyst}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function _renderDiscResults(results, timestamp, total) {
+  const body = document.getElementById('disc-results-body');
+  if (!results || !results.length) {
+    body.innerHTML = '<div class="empty" style="padding:2rem;text-align:center;color:#475569">Keine BUY/WATCH-Kandidaten gefunden.</div>';
+    return;
+  }
+  const rows = results.map(r => {
+    const conf    = r.confidence || 0;
+    const confCol = conf >= 0.7 ? '#4ade80' : conf >= 0.5 ? '#fbbf24' : '#f87171';
+    const riskCol = r.risk_level === 'LOW' ? '#4ade80' : r.risk_level === 'HIGH' ? '#f87171' : '#fbbf24';
+    const isBuy   = r.recommendation === 'BUY';
+    const cats    = (r.catalysts||[]).slice(0,2).map(c =>
+      `<span style="display:inline-block;background:#1e3a5f;color:#60a5fa;
+               font-size:.72rem;padding:.1rem .4rem;border-radius:4px;
+               margin:.1rem .15rem 0 0">${c}</span>`).join('');
+    return `<tr>
+      <td style="padding:.7rem 1rem">
+        <strong style="font-size:.95rem">${r.symbol}</strong>${idLine(r)}
+        <div style="font-size:.72rem;color:#34d399;margin-top:.1rem">${r.theme||''}</div>
+      </td>
+      <td style="padding:.7rem .5rem">
+        <span class="tag ${isBuy?'buy':'hold'}">${r.recommendation}</span>
+      </td>
+      <td style="padding:.7rem .5rem;color:${confCol};font-weight:600">${(conf*100).toFixed(0)}%</td>
+      <td style="padding:.7rem .5rem"><span style="color:${riskCol};font-size:.8rem">${r.risk_level||'–'}</span></td>
+      <td style="padding:.7rem .5rem;font-size:.78rem;color:#64748b">
+        ${r.target_horizon||'–'}
+        ${r.upside_potential ? '<br><span style="color:#4ade80">↑ '+r.upside_potential+'</span>' : ''}
+      </td>
+      <td style="padding:.7rem 1rem;max-width:300px">
+        <div style="color:#94a3b8;font-size:.81rem;margin-bottom:.25rem">
+          ${(r.rationale||'').slice(0,130)}${(r.rationale||'').length>130?'…':''}
+        </div>
+        <div>${cats}</div>
+        ${r.entry_strategy ? `<div style="color:#fbbf24;font-size:.75rem;margin-top:.25rem">📍 ${r.entry_strategy}</div>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Symbol / Trend</th><th>Empf.</th><th>Konf.</th>
+        <th>Risiko</th><th>Horizont / Upside</th><th>Analyse &amp; Einstieg</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  if (timestamp) {
+    document.getElementById('mk-ts').textContent = ts(timestamp);
+  }
+}
+
+function _showErr(id, msg) {
+  document.getElementById(id).innerHTML =
+    `<div style="padding:1.2rem;margin:1rem;border:1px solid #7f1d1d;background:#2a1215;color:#fca5a5;border-radius:8px;font-size:.85rem">⚠ ${msg}</div>`;
+}
+
+async function loadDiscoveryResults() {
+  try {
+    const r = await api('/api/market/discover/results');
+    if (r.themes && r.themes.length)   _renderThemes(r.themes);
+    if (r.results && r.results.length) _renderDiscResults(r.results, r.timestamp, r.total_analysed);
+    const s = await api('/api/market/discover/status');
+    if (s.running) _startDiscPoll();
+  } catch(e) { console.error('loadDiscoveryResults:', e); }
+}
+
+function _startDiscPoll() {
+  if (_discPollTimer) return;
+  const wrap  = document.getElementById('disc-progress-wrap');
+  const fill  = document.getElementById('disc-progress-fill');
+  const label = document.getElementById('disc-progress-label');
+  const pct   = document.getElementById('disc-progress-pct');
+  const sym   = document.getElementById('disc-progress-sym');
+  const badge = document.getElementById('disc-phase-badge');
+  const btn   = document.getElementById('btn-discover');
+  const btnL  = document.getElementById('disc-btn-label');
+  const btnI  = document.getElementById('disc-btn-icon');
+  wrap.style.display  = 'block';
+  badge.style.display = 'inline';
+  btn.disabled = true; btnL.textContent = 'Läuft…'; btnI.textContent = '⏳';
+
+  _discPollTimer = setInterval(async () => {
+    try {
+      const s = await api('/api/market/discover/status');
+      badge.textContent = s.phase_num === 1
+        ? '⚡ Phase 1: Trends identifizieren'
+        : `🔬 Phase 2: ${s.progress}/${s.total} analysiert`;
+
+      const p = s.total > 0 ? Math.round((s.progress / s.total) * 100)
+              : s.phase_num === 1 ? 20 : 0;
+      fill.style.width  = p + '%';
+      pct.textContent   = p + '%';
+      label.textContent = s.phase_num === 1 ? 'KI identifiziert Trends…'
+                        : `Analysiere Kandidaten (${s.progress}/${s.total})`;
+      sym.textContent   = s.current ? `Aktuell: ${s.current}` : '';
+
+      if (s.themes && s.themes.length) _renderThemes(s.themes);
+
+      if (!s.running) {
+        clearInterval(_discPollTimer); _discPollTimer = null;
+        wrap.style.display  = 'none';
+        badge.style.display = 'none';
+        btn.disabled = false; btnL.textContent = 'Erneut starten'; btnI.textContent = '🌐';
+        if (s.error) {
+          toast('Discovery-Fehler: ' + s.error, 'error');
+          _showErr('disc-results-body', 'Discovery-Fehler: ' + s.error);
+        } else {
+          _renderDiscResults(s.results, s.timestamp, s.progress);
+          toast(`Discovery: ${s.results.length} Kandidaten in ${(s.themes||[]).length} Trends ✓`);
+        }
+      }
+    } catch(e) { _pollFails++; if (_pollFails >= 3) toast('Status-Abfrage fehlgeschlagen: ' + e.message, 'error'); }
+  }, 2500);
+}
+
+async function startDiscovery() {
+  const btn = document.getElementById('btn-discover');
+  if (btn.disabled) return;
+  try {
+    await api('/api/market/discover', {method:'POST'});
+    toast('KI-Discovery gestartet – Phase 1: Trends suchen…');
+    _startDiscPoll();
+  } catch(e) {
+    if (e.message.includes('409')) _startDiscPoll();
+    else toast(e.message, 'error');
+  }
+}
+
+// ── Pennystock ────────────────────────────────────────────────
+let _pennyPollTimer = null;
+let _pollFails = 0;
+
+function _renderPennyResults(results, timestamp, total) {
+  const buys   = results.filter(r => ['SPECULATIVE_BUY','BUY'].includes(r.recommendation)).length;
+  const watches = results.filter(r => r.recommendation === 'WATCH').length;
+  document.getElementById('pk-buy').textContent   = buys;
+  document.getElementById('pk-watch').textContent = watches;
+  document.getElementById('pk-total').textContent = total || results.length;
+  document.getElementById('pk-ts').textContent    = timestamp ? ts(timestamp) : '–';
+
+  const body = document.getElementById('penny-results-body');
+  if (!results.length) {
+    body.innerHTML = '<div class="empty" style="padding:2rem;text-align:center;color:#475569">Keine Kandidaten gefunden.</div>';
+    return;
+  }
+  const rows = results.map(r => {
+    const conf    = r.confidence || 0;
+    const confCol = conf >= 0.65 ? '#fb923c' : conf >= 0.5 ? '#fbbf24' : '#f87171';
+    const isSpec  = r.recommendation === 'SPECULATIVE_BUY';
+    const cats    = (r.risks||[]).slice(0,2).map(c =>
+      `<span style="display:inline-block;background:#431407;color:#fb923c;
+               font-size:.72rem;padding:.1rem .4rem;border-radius:4px;
+               margin:.1rem .15rem 0 0">⚠ ${c}</span>`).join('');
+    const price   = r.approx_price_usd
+      ? `<div style="color:#fbbf24;font-size:.78rem">~$${r.approx_price_usd}</div>` : '';
+    return `<tr>
+      <td style="padding:.75rem 1rem">
+        <strong style="font-size:.95rem;color:#fb923c">${r.symbol}</strong>${idLine(r)}
+        <div style="font-size:.75rem;color:#94a3b8">${r.name||''}</div>
+        <div style="font-size:.72rem;color:#64748b">${r.exchange||''} · ${r.market_cap||''}</div>
+        ${price}
+      </td>
+      <td style="padding:.75rem .5rem">
+        <span style="background:${isSpec?'#431407':'#1e3a2e'};
+                     color:${isSpec?'#fb923c':'#4ade80'};
+                     padding:.2rem .5rem;border-radius:5px;
+                     font-size:.75rem;font-weight:700">
+          ${r.recommendation}
+        </span>
+      </td>
+      <td style="padding:.75rem .5rem;color:${confCol};font-weight:600">${(conf*100).toFixed(0)}%</td>
+      <td style="padding:.75rem .5rem;font-size:.78rem">
+        <div style="color:#4ade80">${r.upside_potential||'–'}</div>
+        <div style="color:#64748b;font-size:.72rem">${r.target_horizon||''}</div>
+      </td>
+      <td style="padding:.75rem 1rem;max-width:320px">
+        <div style="color:#94a3b8;font-size:.81rem;margin-bottom:.3rem">
+          ${(r.rationale||'').slice(0,130)}${(r.rationale||'').length>130?'…':''}
+        </div>
+        ${r.catalyst ? `<div style="color:#fbbf24;font-size:.76rem;margin-bottom:.25rem">⚡ ${r.catalyst}</div>` : ''}
+        ${r.entry_strategy ? `<div style="color:#60a5fa;font-size:.75rem;margin-bottom:.2rem">📍 ${r.entry_strategy}</div>` : ''}
+        ${r.stop_loss      ? `<div style="color:#f87171;font-size:.74rem">🛑 ${r.stop_loss}</div>` : ''}
+        <div style="margin-top:.3rem">${cats}</div>
+        ${r.warning ? `<div style="color:#ef4444;font-size:.72rem;margin-top:.3rem;font-style:italic">⚠ ${r.warning}</div>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<table>
+    <thead><tr>
+      <th>Symbol / Name</th><th>Empf.</th><th>Konf.</th>
+      <th>Upside / Horizont</th><th>Analyse / Einstieg / Risiken</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+async function loadPennyResults() {
+  try {
+    const r = await api('/api/market/penny/results');
+    if (r.results && r.results.length)
+      _renderPennyResults(r.results, r.timestamp, r.total_analysed);
+    const s = await api('/api/market/penny/status');
+    if (s.running) _startPennyPoll();
+  } catch(e) { console.error('loadPennyResults:', e); }
+}
+
+function _startPennyPoll() {
+  if (_pennyPollTimer) return;
+  const wrap  = document.getElementById('penny-progress-wrap');
+  const fill  = document.getElementById('penny-progress-fill');
+  const label = document.getElementById('penny-progress-label');
+  const pct   = document.getElementById('penny-progress-pct');
+  const sym   = document.getElementById('penny-progress-sym');
+  const badge = document.getElementById('penny-phase-badge');
+  const btn   = document.getElementById('btn-penny');
+  const btnL  = document.getElementById('penny-btn-label');
+  const btnI  = document.getElementById('penny-btn-icon');
+  wrap.style.display  = 'block';
+  badge.style.display = 'inline';
+  btn.disabled = true; btnL.textContent = 'Läuft…'; btnI.textContent = '⏳';
+
+  _pennyPollTimer = setInterval(async () => {
+    try {
+      const s = await api('/api/market/penny/status');
+      badge.textContent = s.phase_num === 1
+        ? '⚡ Phase 1: Kandidaten suchen'
+        : `🔬 Phase 2: ${s.progress}/${s.total} analysiert`;
+      const p = s.total > 0 ? Math.round((s.progress/s.total)*100)
+              : s.phase_num === 1 ? 15 : 0;
+      fill.style.width  = p + '%';
+      pct.textContent   = p + '%';
+      label.textContent = s.phase_num === 1
+        ? 'KI sucht Pennystock-Kandidaten…'
+        : `Tiefenanalyse (${s.progress}/${s.total})`;
+      sym.textContent   = s.current ? `Aktuell: ${s.current}` : '';
+
+      if (!s.running) {
+        clearInterval(_pennyPollTimer); _pennyPollTimer = null;
+        wrap.style.display  = 'none';
+        badge.style.display = 'none';
+        btn.disabled = false; btnL.textContent = 'Erneut scannen'; btnI.textContent = '💎';
+        if (s.error) { toast('Pennystock-Fehler: ' + s.error, 'error'); _showErr('penny-results-body', 'Pennystock-Fehler: ' + s.error); }
+        else {
+          _renderPennyResults(s.results, s.timestamp, s.progress);
+          toast(`Pennystock-Scan: ${s.results.length} Kandidaten ✓`);
+        }
+      }
+    } catch(e) { _pollFails++; if (_pollFails >= 3) toast('Status-Abfrage fehlgeschlagen: ' + e.message, 'error'); }
+  }, 2500);
+}
+
+async function startPenny() {
+  const btn = document.getElementById('btn-penny');
+  if (btn.disabled) return;
+  try {
+    await api('/api/market/penny', {method:'POST'});
+    toast('Pennystock-Discovery gestartet…');
+    _startPennyPoll();
+  } catch(e) {
+    if (e.message.includes('409')) _startPennyPoll();
+    else toast(e.message, 'error');
+  }
+}
+
+// ── Unternehmensanalyse ───────────────────────────────────────
+let _anTimer = null;
+
+function _anList(items, fn) {
+  return (items && items.length) ? items.map(fn).join('') : '<div style="color:#64748b;font-size:.85rem">Keine Angaben</div>';
+}
+function _anBox(title, body, url) {
+  const src = /^https?:\/\//i.test(url || '')
+    ? ` <a href="${url}" target="_blank" rel="noopener noreferrer" style="font-weight:400;font-size:.75rem;color:#60a5fa">Quelle ↗</a>` : '';
+  return `<div class="card"><div class="card-head">${title}${src}</div><div style="padding:1rem;font-size:.87rem;line-height:1.55;color:#cbd5e1">${body}</div></div>`;
+}
+function _anKV(label, v) {
+  return v ? `<div style="margin:.25rem 0"><span style="color:#64748b">${label}:</span> ${v}</div>` : '';
+}
+function _safeUrl(u) { return /^https?:\/\//i.test(u) ? u : '#'; }
+
+function _anHorizons(hs) {
+  hs = (hs || []).filter(h => h && typeof h === 'object').slice(0, 3);
+  if (!hs.length) return '';
+  const cfg = {up: ['↗', '#4ade80'], down: ['↘', '#f87171'], flat: ['→', '#94a3b8']};
+  const cards = hs.map(h => {
+    const [arrow, col] = cfg[(h.direction || 'flat').toLowerCase()] || cfg.flat;
+    return `<div style="background:#12151f;border:1px solid #2d3148;border-radius:10px;padding:1rem;text-align:center">
+      <div style="color:#94a3b8;font-size:.8rem;font-weight:600;letter-spacing:.03em">${h.period || ''}</div>
+      <div style="font-size:3.4rem;line-height:1.1;color:${col};margin:.3rem 0">${arrow}</div>
+      <div style="font-size:1.15rem;font-weight:700;color:${col}">${h.price_effect || 'offen'}</div>
+      <div style="font-size:.84rem;color:#cbd5e1;margin:.6rem 0 .4rem;line-height:1.5;text-align:left">${h.events || ''}</div>
+      <div style="font-size:.72rem;color:#64748b">Wahrscheinlichkeit: ${h.probability || 'unbekannt'}</div></div>`;
+  }).join('');
+  return `<div class="card"><div class="card-head">🔭 Ausblick: Was kann passieren?
+      <span style="font-weight:400;color:#64748b;font-size:.75rem">Vermutung der KI – keine Prognose</span></div>
+    <div style="padding:1rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem">${cards}</div>
+    <div style="padding:0 1rem 1rem;color:#64748b;font-size:.75rem">Kursspannen sind grobe Szenario-Schätzungen auf Basis der Datenlage.</div></div>`;
+}
+
+async function downloadPdf(id, btn) {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = 'erstelle PDF…';
+  try {
+    const r = await fetch(`/api/analysis/${id}/pdf`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const cd = r.headers.get('Content-Disposition') || '';
+    const name = (cd.match(/filename="([^"]+)"/) || [])[1] || 'Analyse.pdf';
+    const url = URL.createObjectURL(await r.blob());
+    const a = Object.assign(document.createElement('a'), {href: url, download: name});
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  } catch(e) { toast('PDF-Fehler: ' + e.message, 'error'); }
+  btn.disabled = false; btn.textContent = old;
+}
+
+function renderAnalysis(d) {
+  const c = d.company || {}, m = d.market || {}, r = d.reports || {}, f = d.financial_health || {},
+        k = d.competition || {}, o = d.outlook || {};
+  const verdict = (o.verdict || 'NEUTRAL').toUpperCase();
+  const vcls = verdict === 'BULLISH' ? 'buy' : verdict === 'BEARISH' ? 'sell' : 'neutral';
+  const sent = s => s === 'positiv' ? '#4ade80' : s === 'negativ' ? '#f87171' : '#94a3b8';
+  const warn = d.data_warning
+    ? `<div style="padding:.8rem 1rem;margin-bottom:1rem;border:1px solid #78350f;background:#2a1d0a;color:#fbbf24;border-radius:8px;font-size:.85rem">⚠ ${d.data_warning}</div>` : '';
+  const idWarn = (c.identification_confidence || '').toLowerCase() === 'niedrig'
+    ? `<div style="color:#f87171;margin:.4rem 0">⚠ Zuordnung unsicher: ${c.identification_note || ''}</div>` : '';
+  document.getElementById('an-result').innerHTML = warn +
+    `<div class="card"><div class="card-head">
+       <span><strong style="font-size:1.05rem">${c.name || d.isin}</strong>
+       <span style="color:#64748b;margin-left:.5rem">${d.isin}${c.ticker ? ' · ' + c.ticker : ''}${c.exchange ? ' · ' + c.exchange : ''}</span></span>
+       <span style="color:#64748b;font-size:.75rem">${d.provider || ''} · ${ts(d.timestamp)}
+         ${d.isin ? `<button data-isin="${d.isin}" data-ticker="${c.ticker || ''}" onclick="addAnalysisToWatchlist(this)" style="margin-left:.7rem;padding:.25rem .7rem;background:#2d3148;color:#e2e8f0;border:none;border-radius:5px;cursor:pointer;font-size:.78rem">＋ Watchlist</button>` : ''}
+         ${d.id ? `<button onclick="downloadPdf(${Number(d.id)}, this)" style="margin-left:.7rem;padding:.25rem .7rem;background:#4f46e5;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:.78rem;font-weight:600">📄 PDF-Report</button>` : ''}</span></div>
+     <div style="padding:1rem;font-size:.87rem;line-height:1.55;color:#cbd5e1">
+       ${c.business_summary || ''}${idWarn}
+       ${_anKV('Land', c.country)}${_anKV('Branche', c.sector)}
+       ${c.website ? _anKV('Website', `<a href="${_safeUrl(c.website)}" target="_blank" rel="noopener noreferrer" style="color:#60a5fa">${c.website}</a>`) : ''}
+     </div></div>` +
+    `<div class="card"><div class="card-head">🤖 KI-Einschätzung
+       <span class="tag ${vcls}">${verdict}</span></div>
+     <div style="padding:1rem;font-size:.87rem;line-height:1.6;color:#e2e8f0">
+       ${_anKV('Horizont', o.horizon)}${_anKV('Belastbarkeit der Daten', o.confidence != null ? Math.round(o.confidence * 100) + '%' : '')}
+       <p style="margin:.6rem 0">${o.thesis || ''}</p>
+       ${_anKV('Bull-Case', o.bull_case)}${_anKV('Bear-Case', o.bear_case)}
+       <div style="margin-top:.6rem;color:#64748b">Worauf achten:</div>
+       <ul style="margin:.2rem 0 0 1.1rem">${_anList(o.watchpoints, w => `<li>${w}</li>`)}</ul>
+       <div style="margin-top:.8rem;color:#64748b;font-size:.75rem">Keine Anlageberatung – KI-Einschätzung auf Basis öffentlicher Informationen, kann falsch sein.</div>
+     </div></div>` +
+    _anHorizons(o.horizons) +
+    _anBox('📊 Marktdaten', _anKV('Marktkapitalisierung', m.market_cap) + _anKV('Kurs', m.price) + _anKV('Stand', m.as_of) +
+           _anKV('Entwicklung 1 Jahr', m.change_1y) + _anKV('Bewertung', m.valuation) + _anKV('Analystenmeinung', m.analyst_view), (d.urls||{}).market) +
+    _anBox('📰 Aktuelle News', _anList(d.news, n =>
+      `<div style="padding:.5rem 0;border-bottom:1px solid #2d3148"><span style="color:#64748b">${n.date || ''}</span>
+       <strong style="color:${sent(n.sentiment)}"> ${/^https?:\/\//i.test(n.url||'') ? `<a href="${n.url}" target="_blank" rel="noopener noreferrer" style="color:inherit">${n.headline || ''} ↗</a>` : (n.headline || '')}</strong>
+       <div>${n.summary || ''}</div><div style="color:#64748b;font-size:.75rem">${n.source || ''}</div></div>`)) +
+    _anBox('👔 Führungsebene', _anList(d.management, x =>
+      `<div style="padding:.4rem 0;border-bottom:1px solid #2d3148"><span style="color:#64748b">${x.date || ''}</span> ${x.change || ''}
+       <div style="color:#94a3b8">${x.impact || ''}</div></div>`), (d.urls||{}).management) +
+    _anBox('📑 Berichte &amp; Kennzahlen',
+      _anKV('Zeitraum', r.latest_period) + _anKV('Veröffentlicht', r.published) + _anKV('Umsatz', r.revenue) +
+      _anKV('Gewinn', r.net_income) + _anKV('EPS', r.eps) + _anKV('Ausblick des Unternehmens', r.guidance) +
+      _anKV('Trend', r.trend) +
+      `<ul style="margin:.4rem 0 0 1.1rem">${(r.highlights || []).map(h => `<li>${h}</li>`).join('')}</ul>` +
+      ((r.next_events || []).length ? `<div style="margin-top:.5rem;color:#64748b">Kommende Termine:</div>` +
+        r.next_events.map(e => `<div>${e.date || ''} – ${e.event || ''}</div>`).join('') : ''), (d.urls||{}).reports) +
+    _anBox('🏦 Finanzlage', _anKV('Cash / Schulden', f.cash_debt) + _anKV('Cashflow', f.cash_flow) +
+           _anKV('Dividende', f.dividend) + _anKV('Einschätzung', f.assessment), (d.urls||{}).financials) +
+    _anBox('⚔️ Wettbewerb', _anKV('Position', k.position) + _anKV('Konkurrenten', (k.competitors || []).join(', ')) + _anKV('Wettbewerbsvorteil', k.moat)) +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem">` +
+      _anBox('🚀 Katalysatoren', `<ul style="margin-left:1.1rem">${_anList(d.catalysts, x => `<li>${x}</li>`)}</ul>`) +
+      _anBox('⚠️ Risiken', `<ul style="margin-left:1.1rem">${_anList(d.risks, x => `<li>${x}</li>`)}</ul>`) + `</div>` +
+    ((d.sources || []).length ? _anBox('🔗 Quellen', d.sources.map(s =>
+      `<div><a href="${_safeUrl(s.url)}" target="_blank" rel="noopener noreferrer" style="color:#60a5fa">${s.title}</a></div>`).join('')) : '');
+  if (typeof afterAnalysisRender === 'function') afterAnalysisRender(d);
+}
+
+async function loadAnalysisHistory() {
+  try {
+    const rows = await api('/api/analysis');
+    document.getElementById('an-history').innerHTML = rows.length ? rows.map(r => `
+      <tr><td><input type="checkbox" class="an-pick" value="${r.id}" onchange="anPickChanged()"></td><td>${ts(r.timestamp)}</td><td><strong>${r.name || '–'}</strong></td><td>${r.isin}</td>
+      <td>${r.live ? '🌐 live' : '<span title="Nur Modellwissen">📚 Modell</span>'}</td>
+      <td><button onclick="openAnalysis(${r.id})" style="padding:.2rem .6rem;background:#2d3148;color:#e2e8f0;border:none;border-radius:5px;cursor:pointer">Öffnen</button></td></tr>`).join('')
+      : '<tr><td colspan="6" class="empty">Noch keine Analysen</td></tr>';
+    const s = await api('/api/analysis/status');
+    if (s.running) _pollAnalysis();
+  } catch(e) { console.error('loadAnalysisHistory:', e); }
+}
+
+async function openAnalysis(id) {
+  try { renderAnalysis(await api('/api/analysis/' + id)); window.scrollTo({top: 0, behavior: 'smooth'}); }
+  catch(e) { toast(e.message, 'error'); }
+}
+
+function _pollAnalysis() {
+  if (_anTimer) return;
+  const st = document.getElementById('an-status'), btn = document.getElementById('an-btn');
+  btn.disabled = true;
+  _anTimer = setInterval(async () => {
+    try {
+      const s = await api('/api/analysis/status');
+      st.textContent = s.running ? `⏳ ${s.isin}: ${_unesc(s.step)} (${s.elapsed}s)` : '';
+      if (!s.running) {
+        clearInterval(_anTimer); _anTimer = null; btn.disabled = false;
+        if (s.error) { toast('Analyse-Fehler: ' + s.error, 'error'); st.textContent = '⚠ ' + _unesc(s.error); }
+        else {
+          toast('Analyse fertig ✓');
+          const rows = await api('/api/analysis'); await loadAnalysisHistory();
+          if (rows.length) openAnalysis(rows[0].id);
+        }
+      }
+    } catch(e) { /* nächster Versuch */ }
+  }, 3000);
+}
+
+async function startAnalysis() {
+  const isin = document.getElementById('an-isin').value.trim().toUpperCase();
+  if (!isin) return;
+  try {
+    await api('/api/analysis', {method: 'POST', body: JSON.stringify({isin})});
+    document.getElementById('an-result').innerHTML = '';
+    toast('Analyse gestartet…');
+    _pollAnalysis();
+  } catch(e) {
+    if (e.message.includes('409')) _pollAnalysis(); else toast(e.message, 'error');
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────
+loadOverview();
+</script>
+<script src="/static/views.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  portfolio-agent:
+    build: .
+    ports:
+      - "127.0.0.1:8888:8888"   # nur lokal; fuer Fernzugriff Reverse-Proxy mit HTTPS davorschalten
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
