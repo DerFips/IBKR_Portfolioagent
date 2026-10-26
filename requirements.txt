@@ -7,4 +7,4 @@ httpx>=0.28.1
 ib_insync>=0.9.86
 anthropic>=0.40
 reportlab>=4.0
-cryptography>=42
+cryptography>=50.0.2
